@@ -1,0 +1,19 @@
+Key,Value
+TemplateFileId,
+ImageWidth,1200
+ImageHeight,850
+FieldPositions,[]
+EmailSubject,Your certificate for {{EventName}}
+EmailBody,"Hi {{Name}},
+
+Thank you for taking part in {{EventName}}.
+You can download your certificate here:
+{{PortalLink}}
+
+If asked, your access code is: {{Code}}
+
+Regards"
+EmailFromName,
+ReplyToEmail,
+DefaultEventName,
+ParticipantPortalUrl,

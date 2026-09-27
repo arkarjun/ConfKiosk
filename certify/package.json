@@ -1,0 +1,19 @@
+{
+  "name": "certificate-generator",
+  "version": "0.1.0",
+  "description": "A generic, self-serve certificate tool built on Google Sheets + Apps Script. Deployers upload a design, positions are set visually, participants validate with email+code and render/download their own certificate client-side - nothing is generated or stored server-side.",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "build:bound": "node scripts/build.js bound",
+    "build:standalone": "node scripts/build.js standalone",
+    "push:bound": "npm run build:bound && cd build/bound && clasp push",
+    "push:standalone": "npm run build:standalone && cd build/standalone && clasp push",
+    "open:bound": "cd build/bound && clasp open",
+    "open:standalone": "cd build/standalone && clasp open",
+    "test": "node test/run-all.js"
+  },
+  "devDependencies": {
+    "@google/clasp": "^2.4.2"
+  }
+}

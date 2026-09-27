@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <style>
+    :root {
+      --bg: #f6f7f9;
+      --card: #ffffff;
+      --border: #dde1e6;
+      --text: #1c1f24;
+      --muted: #6b7280;
+      --accent: #2563eb;
+      --accent-hover: #1d4ed8;
+      --danger: #dc2626;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      margin: 0;
+      padding: 24px 16px;
+      display: flex;
+      justify-content: center;
+    }
+    .wrap { max-width: 720px; width: 100%; }
+    h1 { font-size: 20px; margin: 0 0 6px; text-align: center; }
+    .sub { color: var(--muted); font-size: 13px; text-align: center; margin-bottom: 20px; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 22px;
+      margin-bottom: 16px;
+    }
+    label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 4px; }
+    input[type=text], input[type=email] {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 14px;
+    }
+    .field { margin-bottom: 14px; }
+    button {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      padding: 11px 18px;
+      border-radius: 6px;
+      font-size: 14px;
+      cursor: pointer;
+      font-weight: 600;
+      width: 100%;
+    }
+    button:hover { background: var(--accent-hover); }
+    button.secondary { background: #fff; color: var(--text); border: 1px solid var(--border); margin-top: 8px; }
+    button.secondary:hover { background: #f0f1f3; }
+    button:disabled { opacity: 0.6; cursor: default; }
+    .error { color: var(--danger); font-size: 13px; margin-top: 10px; text-align: center; }
+    #certCanvas { max-width: 100%; border: 1px solid var(--border); border-radius: 6px; display: block; margin: 0 auto; }
+    .btnrow { display: flex; gap: 10px; margin-top: 16px; }
+    .spinner {
+      display: inline-block; width: 14px; height: 14px;
+      border: 2px solid #fff; border-top-color: transparent;
+      border-radius: 50%; animation: spin 0.7s linear infinite;
+      margin-right: 8px; vertical-align: -2px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #resultArea { display: none; text-align: center; }
+    #formArea.hidden { display: none; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Download Your Certificate</h1>
+    <div class="sub">Enter the email and code from your invitation to get your certificate.</div>
+
+    <div class="card" id="formArea">
+      <div class="field">
+        <label>Email</label>
+        <input type="email" id="emailInput" value="<?= prefillEmail ?>" placeholder="you@example.com">
+      </div>
+      <div class="field">
+        <label>Code</label>
+        <input type="text" id="codeInput" value="<?= prefillCode ?>" placeholder="e.g. A3F9K2" style="text-transform:uppercase;">
+      </div>
+      <button id="submitBtn">Get My Certificate</button>
+      <div class="error" id="formError"></div>
+    </div>
+
+    <div class="card" id="resultArea">
+      <canvas id="certCanvas"></canvas>
+      <div class="btnrow">
+        <button id="downloadPngBtn">Download as Image (PNG)</button>
+        <button id="downloadPdfBtn" class="secondary">Download as PDF</button>
+      </div>
+      <div class="error" id="resultError"></div>
+      <button id="startOverBtn" class="secondary" style="margin-top:10px;">Look up another certificate</button>
+    </div>
+  </div>
+
+  <script>
+    // Injected by the server (Web.gs doGet). Empty string in bound mode.
+    var EVENT_ID = <?!= JSON.stringify(eventId || '') ?>;
+    var currentEmail = '', currentCode = '';
+
+    function setError(elId, msg) {
+      document.getElementById(elId).textContent = msg || '';
+    }
+
+    document.getElementById('submitBtn').addEventListener('click', submitLookup);
+    document.getElementById('codeInput').addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') submitLookup();
+    });
+    document.getElementById('emailInput').addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') submitLookup();
+    });
+    document.getElementById('downloadPngBtn').addEventListener('click', downloadPng);
+    document.getElementById('downloadPdfBtn').addEventListener('click', downloadPdf);
+    document.getElementById('startOverBtn').addEventListener('click', function () {
+      document.getElementById('resultArea').style.display = 'none';
+      document.getElementById('formArea').classList.remove('hidden');
+      setError('resultError', '');
+    });
+
+    // Auto-submit if both fields were prefilled from the emailed link.
+    window.onload = function () {
+      var e = document.getElementById('emailInput').value.trim();
+      var c = document.getElementById('codeInput').value.trim();
+      if (e && c) submitLookup();
+    };
+
+    function submitLookup() {
+      var email = document.getElementById('emailInput').value.trim();
+      var code = document.getElementById('codeInput').value.trim();
+      setError('formError', '');
+      if (!email || !code) {
+        setError('formError', 'Please enter both your email and code.');
+        return;
+      }
+      var btn = document.getElementById('submitBtn');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span>Checking…';
+      google.script.run
+        .withSuccessHandler(function (res) {
+          btn.disabled = false;
+          btn.textContent = 'Get My Certificate';
+          if (!res.ok) {
+            setError('formError', res.error || 'Something went wrong.');
+            return;
+          }
+          currentEmail = email;
+          currentCode = code;
+          renderCertificate(res);
+        })
+        .withFailureHandler(function (err) {
+          btn.disabled = false;
+          btn.textContent = 'Get My Certificate';
+          setError('formError', err.message || 'Something went wrong.');
+        })
+        .participantValidateAndGetCertData(EVENT_ID, email, code);
+    }
+
+    function renderCertificate(res) {
+      var canvas = document.getElementById('certCanvas');
+      canvas.width = res.imageWidth;
+      canvas.height = res.imageHeight;
+      var ctx = canvas.getContext('2d');
+      var img = new Image();
+      img.onload = function () {
+        ctx.drawImage(img, 0, 0, res.imageWidth, res.imageHeight);
+        (res.fields || []).forEach(function (f) {
+          ctx.font = f.fontSize + 'px ' + (f.fontFamily || 'Arial');
+          ctx.fillStyle = f.color || '#000000';
+          ctx.textAlign = f.align || 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(f.text || '', f.x, f.y);
+        });
+        document.getElementById('formArea').classList.add('hidden');
+        document.getElementById('resultArea').style.display = 'block';
+      };
+      img.src = res.imageDataUrl;
+    }
+
+    function downloadPng() {
+      var canvas = document.getElementById('certCanvas');
+      var link = document.createElement('a');
+      link.download = 'certificate.png';
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+      confirmDownload();
+    }
+
+    function downloadPdf() {
+      try {
+        var canvas = document.getElementById('certCanvas');
+        var jsPDF = window.jspdf.jsPDF;
+        var orientation = canvas.width >= canvas.height ? 'landscape' : 'portrait';
+        var pdf = new jsPDF({ orientation: orientation, unit: 'px', format: [canvas.width, canvas.height] });
+        var imgData = canvas.toDataURL('image/png');
+        pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
+        pdf.save('certificate.pdf');
+        confirmDownload();
+      } catch (err) {
+        setError('resultError', 'Could not create PDF in this browser. Please use "Download as Image" instead.');
+      }
+    }
+
+    function confirmDownload() {
+      google.script.run.participantConfirmDownload(EVENT_ID, currentEmail, currentCode);
+    }
+  </script>
+</body>
+</html>

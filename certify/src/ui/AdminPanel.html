@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <style>
+    :root {
+      --bg: #f6f7f9;
+      --card: #ffffff;
+      --border: #dde1e6;
+      --text: #1c1f24;
+      --muted: #6b7280;
+      --accent: #2563eb;
+      --accent-hover: #1d4ed8;
+      --danger: #dc2626;
+      --ok: #16a34a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      margin: 0;
+      padding: 24px;
+    }
+    h1 { font-size: 20px; margin: 0 0 4px; }
+    h2 { font-size: 15px; margin: 0 0 12px; }
+    .sub { color: var(--muted); font-size: 13px; margin-bottom: 20px; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 18px 20px;
+      margin-bottom: 20px;
+    }
+    .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 4px; }
+    input[type=text], input[type=email], input[type=number], textarea, select {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 13px;
+      font-family: inherit;
+    }
+    textarea { min-height: 80px; resize: vertical; }
+    .field { margin-bottom: 12px; }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    button {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      padding: 9px 16px;
+      border-radius: 6px;
+      font-size: 13px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    button:hover { background: var(--accent-hover); }
+    button.secondary { background: #fff; color: var(--text); border: 1px solid var(--border); }
+    button.secondary:hover { background: #f0f1f3; }
+    button:disabled { opacity: 0.55; cursor: default; }
+    table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+    th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+    th { color: var(--muted); font-weight: 600; position: sticky; top: 0; background: var(--card); }
+    .tablewrap { max-height: 420px; overflow: auto; border: 1px solid var(--border); border-radius: 8px; }
+    .pill { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+    .pill.sent { background: #dcfce7; color: #166534; }
+    .pill.pending { background: #fef3c7; color: #92400e; }
+    .pill.yes { background: #dbeafe; color: #1e40af; }
+    .status-msg { font-size: 13px; margin-top: 10px; }
+    .status-msg.ok { color: var(--ok); }
+    .status-msg.err { color: var(--danger); }
+    #posCanvasWrap { position: relative; display: inline-block; margin-top: 10px; border: 1px solid var(--border); }
+    #posImg { max-width: 700px; display: block; }
+    .marker {
+      position: absolute;
+      transform: translate(-50%, -50%);
+      background: rgba(37,99,235,0.9);
+      color: #fff;
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 4px;
+      cursor: grab;
+      user-select: none;
+      white-space: nowrap;
+    }
+    .marker:active { cursor: grabbing; }
+    .fieldstyle-row { display: grid; grid-template-columns: 110px 70px 70px 90px 80px; gap: 6px; align-items: center; font-size: 12px; margin-bottom: 6px; }
+    .hint { font-size: 12px; color: var(--muted); margin-top: 6px; }
+    .badge { display: inline-block; background: #eef2ff; color: #4338ca; font-size: 11px; padding: 2px 8px; border-radius: 999px; margin-left: 6px; }
+  </style>
+</head>
+<body>
+  <h1>Certificate Generator — Admin</h1>
+  <div class="sub">Signed in as <?= adminEmail ?><span class="badge" id="eventBadge" style="display:none;"></span></div>
+
+  <!-- ===================== 1. Template & field positions ===================== -->
+  <div class="card">
+    <h2>1. Certificate design & field positions</h2>
+    <div class="field">
+      <label>Upload certificate background image (PNG/JPG)</label>
+      <input type="file" id="templateFile" accept="image/png,image/jpeg">
+    </div>
+    <div id="noFieldsHint" class="hint" style="display:none; color:var(--danger);">
+      No fillable columns found in the Participants tab yet (everything there is a reserved bookkeeping column).
+      Add at least one column such as "Name" before positioning fields.
+    </div>
+    <div id="posCanvasWrap" style="display:none;">
+      <img id="posImg">
+      <div id="markers"></div>
+    </div>
+    <div class="hint" id="posHint" style="display:none;">
+      Drag each label onto the spot where that field should print. Positions save at full image resolution.
+      This list comes directly from your Participants tab's columns — add a column there (e.g. "Certificate Number") and it will appear here automatically.
+    </div>
+
+    <div id="fieldStylesWrap" style="display:none; margin-top:14px;">
+      <div class="fieldstyle-row" style="font-weight:600; color:var(--muted);">
+        <div>Field</div><div>Font size</div><div>Color</div><div>Font</div><div>Align</div>
+      </div>
+      <div id="fieldStyles"></div>
+    </div>
+
+    <div class="row" style="margin-top:14px;">
+      <button id="savePositionsBtn" disabled>Save design & positions</button>
+    </div>
+    <div class="status-msg" id="designStatus"></div>
+  </div>
+
+  <!-- ===================== 2. Email & event settings ===================== -->
+  <div class="card">
+    <h2>2. Email & portal settings</h2>
+    <div class="grid2">
+      <div class="field">
+        <label>Participant Portal URL (the "Anyone" deployment link — paste after you deploy it)</label>
+        <input type="text" id="cfgPortalUrl" placeholder="https://script.google.com/macros/s/.../exec">
+      </div>
+      <div class="field">
+        <label>Email "from" display name (optional)</label>
+        <input type="text" id="cfgFromName" placeholder="e.g. Event Organizers">
+      </div>
+      <div class="field">
+        <label>Reply-To email (optional)</label>
+        <input type="email" id="cfgReplyTo" placeholder="e.g. contact@yourevent.org">
+      </div>
+      <div class="field">
+        <label>Default event name (optional, used if a row leaves it blank)</label>
+        <input type="text" id="cfgEventName" placeholder="e.g. My Conference 2026">
+      </div>
+    </div>
+    <div class="field">
+      <label>Email subject (placeholders: {{Name}} {{EventName}} {{EventDate}} {{Code}})</label>
+      <input type="text" id="cfgSubject" placeholder="Your certificate for {{EventName}}">
+    </div>
+    <div class="field">
+      <label>Email body (placeholders: {{Name}} {{EventName}} {{EventDate}} {{Designation}} {{Affiliation}} {{Role}} {{Code}} {{PortalLink}})</label>
+      <textarea id="cfgBody" placeholder="Hi {{Name}}, ..."></textarea>
+    </div>
+    <button id="saveConfigBtn">Save settings</button>
+    <div class="status-msg" id="configStatus"></div>
+  </div>
+
+  <!-- ===================== 3. Participants ===================== -->
+  <div class="card">
+    <h2>3. Participants</h2>
+    <div class="row" style="margin-bottom:12px;">
+      <button id="refreshBtn" class="secondary">Refresh from Sheet</button>
+      <button id="generateCodesBtn">Generate codes for all</button>
+      <button id="sendEmailsBtn">Send emails (checked rows)</button>
+    </div>
+    <div class="status-msg" id="participantsStatus"></div>
+    <div class="tablewrap">
+      <table>
+        <thead id="participantsHead"><tr></tr></thead>
+        <tbody id="participantsBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    // Injected by the server (Web.gs doGet). Empty string in bound mode.
+    var EVENT_ID = <?!= JSON.stringify(eventId || '') ?>;
+
+    var state = {
+      config: null,
+      participants: [],
+      availableFields: [],   // data-driven: column headers from Participants tab
+      imgNaturalW: 0,
+      imgNaturalH: 0,
+      positions: {},          // field -> {field,x,y,fontSize,color,fontFamily,align}
+      newFileId: null
+    };
+
+    function setStatus(elId, msg, isErr) {
+      var el = document.getElementById(elId);
+      el.textContent = msg || '';
+      el.className = 'status-msg ' + (isErr ? 'err' : 'ok');
+    }
+
+    function escapeHtml(s) {
+      return (s || '').toString().replace(/[&<>"']/g, function (c) {
+        return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c];
+      });
+    }
+
+    window.onload = function () {
+      if (EVENT_ID) {
+        var badge = document.getElementById('eventBadge');
+        badge.textContent = 'event: ' + EVENT_ID;
+        badge.style.display = 'inline-block';
+      }
+      loadFieldsThenConfig();
+      loadParticipants();
+
+      document.getElementById('templateFile').addEventListener('change', onTemplateFileChosen);
+      document.getElementById('savePositionsBtn').addEventListener('click', savePositions);
+      document.getElementById('saveConfigBtn').addEventListener('click', saveConfig);
+      document.getElementById('refreshBtn').addEventListener('click', loadParticipants);
+      document.getElementById('generateCodesBtn').addEventListener('click', generateCodes);
+      document.getElementById('sendEmailsBtn').addEventListener('click', sendEmails);
+    };
+
+    // ---------- available fields (data-driven) + config ----------
+    function loadFieldsThenConfig() {
+      google.script.run
+        .withSuccessHandler(function (fields) {
+          state.availableFields = fields || [];
+          if (state.availableFields.length === 0) {
+            document.getElementById('noFieldsHint').style.display = 'block';
+          }
+          loadConfig();
+        })
+        .withFailureHandler(function (err) { setStatus('designStatus', err.message, true); })
+        .adminGetAvailableFields(EVENT_ID);
+    }
+
+    function loadConfig() {
+      google.script.run
+        .withSuccessHandler(function (cfg) {
+          state.config = cfg;
+          document.getElementById('cfgPortalUrl').value = cfg.ParticipantPortalUrl || '';
+          document.getElementById('cfgFromName').value = cfg.EmailFromName || '';
+          document.getElementById('cfgReplyTo').value = cfg.ReplyToEmail || '';
+          document.getElementById('cfgEventName').value = cfg.DefaultEventName || '';
+          document.getElementById('cfgSubject').value = cfg.EmailSubject || 'Your certificate for {{EventName}}';
+          document.getElementById('cfgBody').value = cfg.EmailBody ||
+            'Hi {{Name}},\n\nThank you for taking part in {{EventName}}.\nYou can download your certificate here:\n{{PortalLink}}\n\nIf asked, your access code is: {{Code}}\n\nRegards';
+
+          (cfg.FieldPositions || []).forEach(function (f) { state.positions[f.field] = f; });
+
+          if (cfg.TemplateFileId) {
+            state.newFileId = cfg.TemplateFileId;
+            state.imgNaturalW = cfg.ImageWidth || 1200;
+            state.imgNaturalH = cfg.ImageHeight || 850;
+            google.script.run.withSuccessHandler(function (dataUrl) {
+              if (dataUrl) showTemplatePreview(dataUrl, true);
+            }).adminGetTemplateImageDataUrl(EVENT_ID, cfg.TemplateFileId);
+          }
+        })
+        .withFailureHandler(function (err) { setStatus('configStatus', err.message, true); })
+        .adminGetConfig(EVENT_ID);
+    }
+
+    function saveConfig() {
+      var payload = {
+        ParticipantPortalUrl: document.getElementById('cfgPortalUrl').value.trim(),
+        EmailFromName: document.getElementById('cfgFromName').value.trim(),
+        ReplyToEmail: document.getElementById('cfgReplyTo').value.trim(),
+        DefaultEventName: document.getElementById('cfgEventName').value.trim(),
+        EmailSubject: document.getElementById('cfgSubject').value,
+        EmailBody: document.getElementById('cfgBody').value
+      };
+      setStatus('configStatus', 'Saving…', false);
+      google.script.run
+        .withSuccessHandler(function () { setStatus('configStatus', 'Saved.', false); })
+        .withFailureHandler(function (err) { setStatus('configStatus', err.message, true); })
+        .adminSetConfig(EVENT_ID, payload);
+    }
+
+    // ---------- template image + positioning ----------
+    function onTemplateFileChosen(e) {
+      var file = e.target.files[0];
+      if (!file) return;
+      var reader = new FileReader();
+      reader.onload = function () {
+        var dataUrl = reader.result;
+        var base64 = dataUrl.split(',')[1];
+        setStatus('designStatus', 'Uploading…', false);
+        google.script.run
+          .withSuccessHandler(function (res) {
+            state.newFileId = res.fileId;
+            showTemplatePreview(dataUrl, false);
+            setStatus('designStatus', 'Uploaded. Drag the labels into place, then click "Save design & positions".', false);
+          })
+          .withFailureHandler(function (err) { setStatus('designStatus', err.message, true); })
+          .adminUploadTemplateImage(EVENT_ID, base64, file.name, file.type);
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function showTemplatePreview(dataUrl, keepExistingPositions) {
+      if (state.availableFields.length === 0) return;
+      var img = document.getElementById('posImg');
+      img.onload = function () {
+        state.imgNaturalW = img.naturalWidth;
+        state.imgNaturalH = img.naturalHeight;
+        document.getElementById('posCanvasWrap').style.display = 'inline-block';
+        document.getElementById('posHint').style.display = 'block';
+        document.getElementById('fieldStylesWrap').style.display = 'block';
+        document.getElementById('savePositionsBtn').disabled = false;
+        renderMarkers(keepExistingPositions);
+        renderFieldStyleRows();
+      };
+      img.src = dataUrl;
+    }
+
+    function renderMarkers(keepExisting) {
+      var wrap = document.getElementById('markers');
+      wrap.innerHTML = '';
+      state.availableFields.forEach(function (fieldName, idx) {
+        var existing = keepExisting ? state.positions[fieldName] : null;
+        var natX = existing ? existing.x : Math.round(state.imgNaturalW * 0.5);
+        var natY = existing ? existing.y : Math.round(state.imgNaturalH * (0.3 + idx * 0.1));
+        if (!existing) {
+          state.positions[fieldName] = {
+            field: fieldName, x: natX, y: natY,
+            fontSize: 32, color: '#1a1a1a', fontFamily: 'Arial', align: 'center'
+          };
+        }
+        var marker = document.createElement('div');
+        marker.className = 'marker';
+        marker.textContent = fieldName;
+        marker.dataset.field = fieldName;
+        positionMarkerOnScreen(marker, natX, natY);
+        makeDraggable(marker);
+        wrap.appendChild(marker);
+      });
+    }
+
+    function positionMarkerOnScreen(marker, natX, natY) {
+      var img = document.getElementById('posImg');
+      var scale = img.clientWidth / state.imgNaturalW;
+      marker.style.left = (natX * scale) + 'px';
+      marker.style.top = (natY * scale) + 'px';
+    }
+
+    function makeDraggable(marker) {
+      var dragging = false;
+      marker.addEventListener('mousedown', function (e) {
+        dragging = true;
+        e.preventDefault();
+      });
+      document.addEventListener('mousemove', function (e) {
+        if (!dragging) return;
+        var wrap = document.getElementById('posCanvasWrap');
+        var rect = wrap.getBoundingClientRect();
+        var img = document.getElementById('posImg');
+        var scale = img.clientWidth / state.imgNaturalW;
+        var xOnScreen = Math.max(0, Math.min(img.clientWidth, e.clientX - rect.left));
+        var yOnScreen = Math.max(0, Math.min(img.clientHeight, e.clientY - rect.top));
+        marker.style.left = xOnScreen + 'px';
+        marker.style.top = yOnScreen + 'px';
+        var field = marker.dataset.field;
+        state.positions[field].x = Math.round(xOnScreen / scale);
+        state.positions[field].y = Math.round(yOnScreen / scale);
+      });
+      document.addEventListener('mouseup', function () { dragging = false; });
+    }
+
+    function renderFieldStyleRows() {
+      var wrap = document.getElementById('fieldStyles');
+      wrap.innerHTML = '';
+      state.availableFields.forEach(function (fieldName) {
+        var p = state.positions[fieldName];
+        var row = document.createElement('div');
+        row.className = 'fieldstyle-row';
+        row.innerHTML =
+          '<div>' + escapeHtml(fieldName) + '</div>' +
+          '<div><input type="number" min="8" max="200" value="' + p.fontSize + '" data-field="' + fieldName + '" data-prop="fontSize"></div>' +
+          '<div><input type="text" value="' + p.color + '" data-field="' + fieldName + '" data-prop="color"></div>' +
+          '<div><input type="text" value="' + p.fontFamily + '" data-field="' + fieldName + '" data-prop="fontFamily"></div>' +
+          '<div><select data-field="' + fieldName + '" data-prop="align">' +
+            '<option value="left"' + (p.align === 'left' ? ' selected' : '') + '>Left</option>' +
+            '<option value="center"' + (p.align === 'center' ? ' selected' : '') + '>Center</option>' +
+            '<option value="right"' + (p.align === 'right' ? ' selected' : '') + '>Right</option>' +
+          '</select></div>';
+        wrap.appendChild(row);
+      });
+      wrap.querySelectorAll('input,select').forEach(function (el) {
+        el.addEventListener('change', function () {
+          var field = el.dataset.field, prop = el.dataset.prop;
+          var val = el.value;
+          if (prop === 'fontSize') val = parseInt(val, 10) || 32;
+          state.positions[field][prop] = val;
+        });
+      });
+    }
+
+    function savePositions() {
+      if (!state.newFileId) { setStatus('designStatus', 'Upload an image first.', true); return; }
+      var fieldPositions = state.availableFields.map(function (f) { return state.positions[f]; });
+      setStatus('designStatus', 'Saving…', false);
+      google.script.run
+        .withSuccessHandler(function () { setStatus('designStatus', 'Saved.', false); })
+        .withFailureHandler(function (err) { setStatus('designStatus', err.message, true); })
+        .adminSetConfig(EVENT_ID, {
+          TemplateFileId: state.newFileId,
+          ImageWidth: state.imgNaturalW,
+          ImageHeight: state.imgNaturalH,
+          FieldPositions: fieldPositions
+        });
+    }
+
+    // ---------- participants ----------
+    function loadParticipants() {
+      setStatus('participantsStatus', 'Loading…', false);
+      google.script.run
+        .withSuccessHandler(function (rows) {
+          state.participants = rows;
+          renderParticipants();
+          setStatus('participantsStatus', rows.length + ' participant(s) loaded.', false);
+        })
+        .withFailureHandler(function (err) { setStatus('participantsStatus', err.message, true); })
+        .adminGetParticipants(EVENT_ID);
+    }
+
+    function renderParticipants() {
+      // Build columns dynamically: Send? + every column except the ones
+      // already shown with special rendering (EmailStatus, Downloaded are
+      // pilled) - Code is always shown too.
+      var hidden = { rowIndex: 1, SendEmail: 1, EmailStatus: 1, Downloaded: 1 };
+      var cols = [];
+      if (state.participants.length > 0) {
+        Object.keys(state.participants[0]).forEach(function (k) {
+          if (!hidden[k]) cols.push(k);
+        });
+      }
+      var headRow = document.querySelector('#participantsHead tr');
+      headRow.innerHTML = '<th>Send?</th>' + cols.map(function (c) { return '<th>' + escapeHtml(c) + '</th>'; }).join('') +
+        '<th>Email status</th><th>Downloaded</th>';
+
+      var body = document.getElementById('participantsBody');
+      body.innerHTML = '';
+      state.participants.forEach(function (p) {
+        var tr = document.createElement('tr');
+        var checked = p.SendEmail !== false;
+        var cells = '<td><input type="checkbox" ' + (checked ? 'checked' : '') + ' data-row="' + p.rowIndex + '"></td>';
+        cols.forEach(function (c) { cells += '<td>' + escapeHtml(p[c]) + '</td>'; });
+        cells += '<td>' + (p.EmailStatus === 'Sent' ? '<span class="pill sent">Sent</span>' : '<span class="pill pending">' + escapeHtml(p.EmailStatus || 'Pending') + '</span>') + '</td>';
+        cells += '<td>' + (p.Downloaded ? '<span class="pill yes">Yes</span>' : '') + '</td>';
+        tr.innerHTML = cells;
+        body.appendChild(tr);
+      });
+      body.querySelectorAll('input[type=checkbox]').forEach(function (cb) {
+        cb.addEventListener('change', function () {
+          google.script.run.adminUpdateSendFlag(EVENT_ID, parseInt(cb.dataset.row, 10), cb.checked);
+        });
+      });
+    }
+
+    function generateCodes() {
+      setStatus('participantsStatus', 'Generating codes…', false);
+      google.script.run
+        .withSuccessHandler(function (res) {
+          setStatus('participantsStatus', 'Generated ' + res.generated + ' new code(s).', false);
+          loadParticipants();
+        })
+        .withFailureHandler(function (err) { setStatus('participantsStatus', err.message, true); })
+        .adminGenerateCodes(EVENT_ID);
+    }
+
+    function sendEmails() {
+      if (!confirm('Send certificate emails now to all checked participants who have not already received one?')) return;
+      setStatus('participantsStatus', 'Sending…', false);
+      google.script.run
+        .withSuccessHandler(function (res) {
+          var msg = 'Sent: ' + res.sent + ', skipped: ' + res.skipped + '.';
+          if (res.errors && res.errors.length) msg += ' Errors: ' + res.errors.join('; ');
+          setStatus('participantsStatus', msg, res.errors && res.errors.length > 0);
+          loadParticipants();
+        })
+        .withFailureHandler(function (err) { setStatus('participantsStatus', err.message, true); })
+        .adminSendEmails(EVENT_ID);
+    }
+  </script>
+</body>
+</html>
