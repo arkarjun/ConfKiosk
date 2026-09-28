@@ -21,6 +21,7 @@ submission in Talks can mint a speaker's comp code for Tickets).
 | [**Talks**](./talks) | Collect and manage CFP submissions | Not started |
 | [**Tickets**](./tickets) | Register attendees and manage check-in | Built, in testing (code lands here once testing is done) |
 | [**Certify**](./certify) | Generate certificates | Built |
+| [**Pulse**](./pulse) | Collect post-event/session feedback from attendees | Not started |
 
 See each module's own README for setup and details.
 
